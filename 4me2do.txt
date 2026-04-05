@@ -1,0 +1,18 @@
+Edited deploy.yml
+
+The GitHub Actions workflow has been created at `.github/workflows/deploy.yml`. 
+
+Whenever you push code changes to the `main` or `master` branches, GitHub will now automatically install dependencies, build the production version of your app using Vite, and construct a static artifact to deploy.
+
+### Important: Repository Settings Configuration
+For this workflow to actually publish the site, you need to configure your repository on GitHub to use Actions for hosting:
+
+1. Go to your repository on GitHub.
+2. Click **Settings** (the gear icon near the top right).
+3. On the left sidebar sidebar, scroll down to the **Pages** section.
+4. Under **Build and deployment**, look for the **Source** dropdown.
+5. Change the source from "Deploy from a branch" to **"GitHub Actions"**.
+
+Once that is set up, your very next commit to the `main` or `master` branch will trigger the workflow and bring your site live on GitHub Pages!
+
+Is there anything else you'd like to work on today?
