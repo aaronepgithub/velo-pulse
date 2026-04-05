@@ -1,0 +1,73 @@
+Deleted 4me2do
+
+For your frontend on GitHub Pages to successfully communicate with your backend on PythonAnywhere, you need to enable **CORS (Cross-Origin Resource Sharing)** in your Python application. 
+
+Since your Python code is likely not in this current workspace, here are the configurations you'll need depending on which web framework you're using.
+
+### If you are using Flask (Most Common)
+You will need to install the `flask-cors` plugin and apply it to your app.
+
+1. **Install the library** in your PythonAnywhere console (using your virtual environment if you have one):
+   ```bash
+   pip install Flask-CORS
+   ```
+
+2. **Update your Python code** (likely in `app.py`, `main.py` or your `wsgi.py` file) to include the CORS setup:
+   ```python
+   from flask import Flask
+   from flask_cors import CORS # Import CORS
+
+   app = Flask(__name__)
+
+   # Enable CORS specifically for your GitHub Pages domain
+   CORS(app, resources={r"/api/*": {"origins": "https://aaronep.github.io"}})
+   
+   # ... the rest of your app configuration and routes
+   ```
+
+### If you are using Django
+You will need the `django-cors-headers` package.
+
+1. **Install the library**:
+   ```bash
+   pip install django-cors-headers
+   ```
+2. **Update `settings.py`**:
+   ```python
+   INSTALLED_APPS = [
+       # ...
+       'corsheaders',
+       # ...
+   ]
+
+   MIDDLEWARE = [
+       'corsheaders.middleware.CorsMiddleware', # MUST be near the top
+       'django.middleware.common.CommonMiddleware',
+       # ...
+   ]
+
+   # Add your GitHub pages site to the allowed origins
+   CORS_ALLOWED_ORIGINS = [
+       "https://aaronep.github.io",
+   ]
+   ```
+
+### If you are using FastAPI
+FastAPI has CORS middleware built-in. Update your main file:
+```python
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://aaronep.github.io"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+### ⚠️ Final Crucial Step
+After applying any changes to your code or installing a new package, **you must go to the "Web" tab in your PythonAnywhere dashboard and click the big green "Reload" button**. Code changes will not take effect until the application is reloaded!
