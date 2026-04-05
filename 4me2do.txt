@@ -1,6 +1,6 @@
 Edited deploy.yml
 
-The GitHub Actions workflow has been created at `.github/workflows/deploy.yml`. 
+The GitHub Actions workflow has been created at `.github/workflows/deploy.yml`. This is used with gh pages.
 
 Whenever you push code changes to the `main` or `master` branches, GitHub will now automatically install dependencies, build the production version of your app using Vite, and construct a static artifact to deploy.
 
