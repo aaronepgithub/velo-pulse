@@ -1,0 +1,36 @@
+CORS CODE TO ADD TO YOUR FLASK APP:
+
+Step 1: Add this import at the top of your Flask file
+=========================================
+from flask_cors import CORS
+
+
+Step 2: After you create your Flask app, add this line
+=========================================
+CORS(app, origins=['https://aaronepgithub.github.io'])
+
+
+FULL EXAMPLE:
+=========================================
+from flask import Flask
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app, origins=['https://aaronepgithub.github.io'])
+
+@app.route('/api/v1/activities')
+def get_activities():
+    # your code here
+    return jsonify(data)
+
+
+INSTALLATION (Run in PythonAnywhere Bash Console):
+=========================================
+source /home/aaronep/.virtualenvs/strava-env/bin/activate
+pip install flask-cors
+
+
+THEN:
+=========================================
+1. Go to PythonAnywhere Web tab
+2. Click the green "Reload" button to reload your web app
