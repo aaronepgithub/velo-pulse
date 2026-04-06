@@ -10,7 +10,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Proxy API requests to avoid CORS issues
+  // Proxy API requests to avoid CORS issues in development
   app.get("/api/v1/*", async (req, res) => {
     const targetUrl = `https://aaronep.pythonanywhere.com${req.originalUrl}`;
     try {
