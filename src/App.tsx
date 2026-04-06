@@ -1263,7 +1263,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <Router>
+    <Router basename={import.meta.env.DEV ? '/' : '/velo-pulse/'}>
       <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row">
         <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
         
