@@ -4,7 +4,8 @@ import {
   PowerTrends,
   ChainUsage,
   BikeUsage,
-  ActivitiesResponse
+  ActivitiesResponse,
+  ActivityDetails
 } from '../types';
 
 const BASE_URL = import.meta.env.DEV 
@@ -45,6 +46,12 @@ export const fitnessApi = {
   getActivities: async (page = 1, perPage = 25): Promise<ActivitiesResponse> => {
     const response = await fetch(`${BASE_URL}/activities?page=${page}&per_page=${perPage}`);
     if (!response.ok) throw new Error('Failed to fetch activities');
+    return response.json();
+  },
+
+  getActivityDetails: async (activityId: string | number): Promise<ActivityDetails> => {
+    const response = await fetch(`${BASE_URL}/activity/${activityId}`);
+    if (!response.ok) throw new Error('Failed to fetch activity details');
     return response.json();
   }
 };

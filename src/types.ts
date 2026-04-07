@@ -125,3 +125,35 @@ export interface ActivitiesResponse {
   total_pages: number;
   activities: Activity[];
 }
+export interface RankingInfo {
+  rank: number;
+  total: number;
+}
+
+export interface DetailedRankings {
+  all_time: RankingInfo | null;
+  this_year: RankingInfo | null;
+  same_gear: RankingInfo | null;
+  same_gear_this_year: RankingInfo | null;
+}
+
+export interface ActivitySegmentEffort {
+  id: number;
+  segment_id: number;
+  segment_name: string;
+  distance?: number;
+  elapsed_time: number;
+  moving_time?: number;
+  start_date_local: string;
+  average_cadence?: number;
+  average_heartrate?: number;
+  average_watts?: number;
+  device_watts?: boolean;
+  time_str?: string;
+  rankings: DetailedRankings;
+}
+
+export interface ActivityDetails {
+  activity: Activity;
+  efforts: ActivitySegmentEffort[];
+}

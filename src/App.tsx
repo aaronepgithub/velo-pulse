@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useParams } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Bike, 
@@ -30,7 +30,9 @@ import {
   Activity,
   SegmentReport,
   SpeedTrends,
-  PowerTrends
+  PowerTrends,
+  ActivityDetails,
+  RankingInfo
 } from './types';
 import { cn } from './lib/utils';
 
@@ -258,7 +260,9 @@ const Dashboard = () => {
               {activities?.activities?.map(activity => (
                 <tr key={activity.id} className="group hover:bg-slate-50 transition-colors">
                   <td className="py-4 px-2">
-                    <p className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{activity.name}</p>
+                    <Link to={`/activity/${activity.id}`} className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                      {activity.name}
+                    </Link>
                   </td>
                   <td className="py-4 px-2 text-sm text-slate-500">{activity.formatted_date}</td>
                   <td className="py-4 px-2 text-sm font-medium text-slate-700">{activity.distance_miles.toFixed(1)} mi</td>
@@ -893,6 +897,123 @@ const Trends = () => {
     </div>
   );
 };
+const ActivityDetailView = () => {
+  const { id } = useParams<{ id: string }>();
+  const [data, setData] = useState<ActivityDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const details = await fitnessApi.getActivityDetails(id);
+        setData(details);
+      } catch (error) {
+        console.error("Error fetching activity details:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [id]);
+
+  if (loading) return <div className="flex items-center justify-center h-full">Loading activity details...</div>;
+  if (!data) return <div className="text-center py-12">Activity not found</div>;
+
+  const { activity, efforts } = data;
+
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+  };
+
+  const RankingBadge = ({ label, ranking }: { label: string, ranking: RankingInfo | null }) => {
+    if (!ranking) return null;
+    const isTop10 = ranking.rank <= 10;
+    const isPR = ranking.rank === 1;
+
+    return (
+      <div className="flex flex-col gap-1">
+        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">{label}</span>
+        <div className={cn(
+          "px-2 py-0.5 rounded text-xs font-bold w-fit",
+          isPR ? "bg-amber-100 text-amber-700 border border-amber-200" :
+          isTop10 ? "bg-blue-100 text-blue-700 border border-blue-200" :
+          "bg-slate-100 text-slate-600 border border-slate-200"
+        )}>
+          {ranking.rank} / {ranking.total}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="space-y-1">
+          <Link to="/activities" className="text-sm font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1 mb-2">
+            <ChevronRight className="w-4 h-4 rotate-180" /> Back to History
+          </Link>
+          <h2 className="text-3xl font-bold text-slate-900">{activity.name}</h2>
+          <p className="text-slate-500 font-medium">{activity.formatted_date} • {activity.start_date_local}</p>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Distance</p>
+            <p className="text-xl font-bold text-slate-900">{activity.distance_miles.toFixed(2)} <span className="text-sm font-normal text-slate-500">mi</span></p>
+          </div>
+          <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+            <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Moving Time</p>
+            <p className="text-xl font-bold text-slate-900">{activity.moving_time_str}</p>
+          </div>
+        </div>
+      </header>
+
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+          <TrendingUp className="w-6 h-6 text-blue-600" />
+          Segment Efforts & Rankings
+        </h3>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                <th className="pb-4 px-4 min-w-[200px]">Segment</th>
+                <th className="pb-4 px-4 text-center">Time</th>
+                <th className="pb-4 px-4">Rankings</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {efforts.map((effort) => (
+                <tr key={effort.id} className="group hover:bg-slate-50 transition-colors">
+                  <td className="py-6 px-4">
+                    <p className="font-bold text-slate-900">{effort.segment_name}</p>
+                  </td>
+                  <td className="py-6 px-4 text-center">
+                    <p className="text-sm font-bold text-slate-700">{formatTime(effort.elapsed_time)}</p>
+                  </td>
+                  <td className="py-6 px-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <RankingBadge label="All Time" ranking={effort.rankings.all_time} />
+                      <RankingBadge label="This Year" ranking={effort.rankings.this_year} />
+                      <RankingBadge label="Same Gear" ranking={effort.rankings.same_gear} />
+                      <RankingBadge label="Gear Year" ranking={effort.rankings.same_gear_this_year} />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Activities = () => {
   const [data, setData] = useState<ActivitiesResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -960,7 +1081,9 @@ const Activities = () => {
               {data?.activities?.map(activity => (
                 <tr key={activity.id} className="group hover:bg-slate-50 transition-colors">
                   <td className="py-4 px-6">
-                    <p className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{activity.name}</p>
+                    <Link to={`/activity/${activity.id}`} className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                      {activity.name}
+                    </Link>
                   </td>
                   <td className="py-4 px-6 text-sm text-slate-500">{activity.formatted_date}</td>
                   <td className="py-4 px-6 text-sm font-medium text-slate-700">{activity.distance_miles.toFixed(1)} mi</td>
@@ -1292,6 +1415,7 @@ export default function App() {
             <Route path="/trends" element={<Trends />} />
             <Route path="/coach" element={<AICoach />} />
             <Route path="/activities" element={<Activities />} />
+            <Route path="/activity/:id" element={<ActivityDetailView />} />
           </Routes>
         </main>
       </div>
