@@ -142,12 +142,14 @@ export interface ActivitySegmentEffort {
   segment_id: number;
   segment_name: string;
   distance?: number;
+  distance_miles?: number;
   elapsed_time: number;
   moving_time?: number;
   start_date_local: string;
   average_cadence?: number;
   average_heartrate?: number;
   average_watts?: number;
+  average_speed?: number;
   device_watts?: boolean;
   time_str?: string;
   rankings: DetailedRankings;

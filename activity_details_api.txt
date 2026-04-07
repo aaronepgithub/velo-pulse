@@ -1,0 +1,54 @@
+Updated Activity Details API documentation:
+**Endpoint:** `GET /api/v1/activity/<activity_id>`
+
+**Description:** Returns detailed information about a specific activity, including segment effort performance and rankings against all efforts, efforts this year, same gear, and same gear this year.
+
+**Response format:**
+```json
+{
+    "activity": {
+        "distance": 45000.0,
+        "distance_miles": 27.96,
+        "formatted_date": "2023-10-24 15:30",
+        "gear_id": "b123456",
+        "gear_name": "Road Bike",
+        "id": 1234567890,
+        "moving_time": 5400,
+        "moving_time_str": "1:30:00",
+        "name": "Afternoon Ride",
+        "start_date_local": "2023-10-24T15:30:00Z"
+    },
+    "efforts": [
+        {
+            "average_cadence": 85.0,
+            "average_heartrate": 160.0,
+            "average_speed": 18.5,
+            "average_watts": 250.5,
+            "distance": 1200.0,
+            "distance_miles": 0.75,
+            "elapsed_time": 240,
+            "id": 987654321,
+            "rankings": {
+                "all_time": {
+                    "rank": 5,
+                    "total": 120
+                },
+                "same_gear": {
+                    "rank": 2,
+                    "total": 45
+                },
+                "same_gear_this_year": {
+                    "rank": 1,
+                    "total": 10
+                },
+                "this_year": {
+                    "rank": 3,
+                    "total": 30
+                }
+            },
+            "segment_id": 12345,
+            "segment_name": "Park Sprint",
+            "start_date_local": "2023-10-24T15:45:00Z",
+            "time_str": "4:00"
+        }
+    ]

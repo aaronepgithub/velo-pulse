@@ -17,7 +17,9 @@ import {
   X,
   Sparkles,
   BrainCircuit,
-  Clock
+  Clock,
+  Heart,
+  Timer
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
@@ -35,6 +37,35 @@ import {
   RankingInfo
 } from './types';
 import { cn } from './lib/utils';
+// Utilities
+export const formatDisplayDate = (dateStr: string | undefined, full = false) => {
+  if (!dateStr) return '';
+  
+  // If it's a standard activity.formatted_date: YYYY-MM-DD HH:MM
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
+  let date: Date;
+  
+  if (match) {
+    const [_, year, month, day, hour, minute] = match;
+    date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
+  } else {
+    // If it's ISO, remove 'Z' to treat as literal local time if 'Z' is present
+    const cleanDateStr = dateStr.includes('T') ? dateStr.replace('Z', '') : dateStr;
+    date = new Date(cleanDateStr);
+  }
+
+  if (isNaN(date.getTime())) return dateStr;
+
+  return date.toLocaleString('en-US', { 
+    weekday: full ? 'long' : undefined, 
+    year: 'numeric', 
+    month: full ? 'long' : 'short', 
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+};
 
 // Components
 const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
@@ -927,7 +958,8 @@ const ActivityDetailView = () => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
-    return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+    if (h > 0) return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   const RankingBadge = ({ label, ranking }: { label: string, ranking: RankingInfo | null }) => {
@@ -936,13 +968,13 @@ const ActivityDetailView = () => {
     const isPR = ranking.rank === 1;
 
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-row sm:flex-col justify-between items-center sm:items-start sm:gap-1 p-2 sm:p-0 bg-slate-50 sm:bg-transparent rounded-lg sm:rounded-none">
         <span className="text-[10px] text-slate-400 uppercase font-bold tracking-tight">{label}</span>
         <div className={cn(
-          "px-2 py-0.5 rounded text-xs font-bold w-fit",
+          "px-2 py-0.5 rounded text-[11px] sm:text-xs font-bold w-fit",
           isPR ? "bg-amber-100 text-amber-700 border border-amber-200" :
           isTop10 ? "bg-blue-100 text-blue-700 border border-blue-200" :
-          "bg-slate-100 text-slate-600 border border-slate-200"
+          "bg-slate-200 text-slate-600 border border-slate-300"
         )}>
           {ranking.rank} / {ranking.total}
         </div>
@@ -958,7 +990,7 @@ const ActivityDetailView = () => {
             <ChevronRight className="w-4 h-4 rotate-180" /> Back to History
           </Link>
           <h2 className="text-3xl font-bold text-slate-900">{activity.name}</h2>
-          <p className="text-slate-500 font-medium">{activity.formatted_date} • {activity.start_date_local}</p>
+          <p className="text-slate-500 font-medium">{formatDisplayDate(activity.formatted_date || activity.start_date_local, true)}</p>
         </div>
         <div className="flex flex-wrap gap-4">
           <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
@@ -978,30 +1010,56 @@ const ActivityDetailView = () => {
           Segment Efforts & Rankings
         </h3>
         
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto -mx-6 px-6">
           <table className="w-full">
             <thead>
               <tr className="text-left text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                <th className="pb-4 px-4 min-w-[200px]">Segment</th>
-                <th className="pb-4 px-4 text-center">Time</th>
-                <th className="pb-4 px-4">Rankings</th>
+                <th className="pb-4 px-4 min-w-[180px]">Segment</th>
+                <th className="pb-4 px-4">Stats</th>
+                <th className="pb-4 px-4 min-w-[150px]">Rankings</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {efforts.map((effort) => (
                 <tr key={effort.id} className="group hover:bg-slate-50 transition-colors">
                   <td className="py-6 px-4">
-                    <p className="font-bold text-slate-900">{effort.segment_name}</p>
-                  </td>
-                  <td className="py-6 px-4 text-center">
-                    <p className="text-sm font-bold text-slate-700">{formatTime(effort.elapsed_time)}</p>
+                    <p className="font-bold text-slate-900 leading-tight mb-1">{effort.segment_name}</p>
+                    <p className="text-[11px] text-slate-400 font-medium">Segment Distance: {(effort.distance_miles || (effort.distance ? effort.distance / 1609.34 : 0)).toFixed(2)} mi</p>
                   </td>
                   <td className="py-6 px-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      <RankingBadge label="All Time" ranking={effort.rankings.all_time} />
-                      <RankingBadge label="This Year" ranking={effort.rankings.this_year} />
-                      <RankingBadge label="Same Gear" ranking={effort.rankings.same_gear} />
-                      <RankingBadge label="Gear Year" ranking={effort.rankings.same_gear_this_year} />
+                    <div className="flex flex-wrap items-center gap-y-2 gap-x-4">
+                      <div className="flex items-center gap-1.5" title="Time">
+                        <Timer className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-sm font-bold text-slate-700">{effort.time_str || formatTime(effort.elapsed_time)}</span>
+                      </div>
+                      {effort.average_watts && (
+                        <div className="flex items-center gap-1.5" title="Power">
+                          <Zap className="w-3.5 h-3.5 text-amber-500" />
+                          <span className="text-sm font-bold text-slate-700">{Math.round(effort.average_watts)}<span className="text-[10px] font-normal text-slate-400 ml-0.5">W</span></span>
+                        </div>
+                      )}
+                      {effort.average_speed && (
+                        <div className="flex items-center gap-1.5" title="Speed">
+                          <Gauge className="w-3.5 h-3.5 text-blue-500" />
+                          <span className="text-sm font-bold text-slate-700">{effort.average_speed.toFixed(1)}<span className="text-[10px] font-normal text-slate-400 ml-0.5">mph</span></span>
+                        </div>
+                      )}
+                      {effort.average_heartrate && (
+                        <div className="flex items-center gap-1.5" title="Heart Rate">
+                          <Heart className="w-3.5 h-3.5 text-red-500" />
+                          <span className="text-sm font-bold text-slate-700">{Math.round(effort.average_heartrate)}<span className="text-[10px] font-normal text-slate-400 ml-0.5">bpm</span></span>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td className="py-6 px-4">
+                    <div className="flex flex-col gap-2 min-w-[140px]">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                        <RankingBadge label="All Time" ranking={effort.rankings.all_time} />
+                        <RankingBadge label="This Year" ranking={effort.rankings.this_year} />
+                        <RankingBadge label="Same Gear" ranking={effort.rankings.same_gear} />
+                        <RankingBadge label="Gear Year" ranking={effort.rankings.same_gear_this_year} />
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -1085,7 +1143,7 @@ const Activities = () => {
                       {activity.name}
                     </Link>
                   </td>
-                  <td className="py-4 px-6 text-sm text-slate-500">{activity.formatted_date}</td>
+                  <td className="py-4 px-6 text-sm text-slate-500">{formatDisplayDate(activity.formatted_date)}</td>
                   <td className="py-4 px-6 text-sm font-medium text-slate-700">{activity.distance_miles.toFixed(1)} mi</td>
                   <td className="py-4 px-6 text-sm text-slate-500">{activity.moving_time_str}</td>
                   <td className="py-4 px-6">
