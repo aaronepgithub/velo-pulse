@@ -284,7 +284,8 @@ const Dashboard = () => {
                 <th className="pb-4 px-2">Date</th>
                 <th className="pb-4 px-2">Distance</th>
                 <th className="pb-4 px-2">Gear</th>
-                <th className="pb-4 px-2">Avg HR</th>
+                <th className="pb-4 px-2 text-right">Avg Power</th>
+                <th className="pb-4 px-2 text-right">Avg HR</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -302,7 +303,8 @@ const Dashboard = () => {
                       {activity.gear_name}
                     </span>
                   </td>
-                  <td className="py-4 px-2 text-sm text-slate-500">{activity.average_heartrate || '--'} bpm</td>
+                  <td className="py-4 px-2 text-sm text-right font-medium text-slate-700">{activity.average_watts ? `${Math.round(activity.average_watts)}W` : '--'}</td>
+                  <td className="py-4 px-2 text-sm text-right text-slate-500">{activity.average_heartrate ? `${Math.round(activity.average_heartrate)} bpm` : '--'}</td>
                 </tr>
               ))}
             </tbody>
@@ -1001,6 +1003,24 @@ const ActivityDetailView = () => {
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Moving Time</p>
             <p className="text-xl font-bold text-slate-900">{activity.moving_time_str}</p>
           </div>
+          {activity.average_watts && (
+            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm" title="Average Power">
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Avg Power</p>
+              <p className="text-xl font-bold text-slate-900">{Math.round(activity.average_watts)} <span className="text-sm font-normal text-slate-500">W</span></p>
+            </div>
+          )}
+          {activity.average_heartrate && (
+            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm" title="Average Heart Rate">
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Avg HR</p>
+              <p className="text-xl font-bold text-slate-900">{Math.round(activity.average_heartrate)} <span className="text-sm font-normal text-slate-500">bpm</span></p>
+            </div>
+          )}
+          {activity.average_cadence && (
+            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm" title="Average Cadence">
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Avg Cadence</p>
+              <p className="text-xl font-bold text-slate-900">{Math.round(activity.average_cadence)} <span className="text-sm font-normal text-slate-500">rpm</span></p>
+            </div>
+          )}
         </div>
       </header>
 
@@ -1132,7 +1152,8 @@ const Activities = () => {
                 <th className="py-4 px-6">Distance</th>
                 <th className="py-4 px-6">Moving Time</th>
                 <th className="py-4 px-6">Gear</th>
-                <th className="py-4 px-6">Avg HR</th>
+                <th className="py-4 px-6 text-right">Avg Power</th>
+                <th className="py-4 px-6 text-right">Avg HR</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -1151,7 +1172,8 @@ const Activities = () => {
                       {activity.gear_name}
                     </span>
                   </td>
-                  <td className="py-4 px-6 text-sm text-slate-500">{activity.average_heartrate || '--'} bpm</td>
+                  <td className="py-4 px-6 text-sm text-right font-medium text-slate-700">{activity.average_watts ? `${Math.round(activity.average_watts)}W` : '--'}</td>
+                  <td className="py-4 px-6 text-sm text-right text-slate-500">{activity.average_heartrate ? `${Math.round(activity.average_heartrate)} bpm` : '--'}</td>
                 </tr>
               ))}
             </tbody>

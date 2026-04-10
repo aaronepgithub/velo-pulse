@@ -105,6 +105,8 @@ export interface BikeUsage {
 
 export interface Activity {
   average_heartrate: number;
+  average_watts?: number;
+  average_cadence?: number;
   date_iso: string;
   detected_gear_name: string;
   distance: number;
