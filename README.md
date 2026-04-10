@@ -23,3 +23,5 @@ View your app in AI Studio: https://ai.studio/apps/219de750-52e7-4280-b218-91312
 send to github:
 'npm run deploy'
 
+AIzaSyCFrODOsyh3OzHlO6a3gOQlpvMKr_xlDQ0
+Gemini API Key
