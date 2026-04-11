@@ -107,6 +107,11 @@ export interface Activity {
   average_heartrate: number;
   average_watts?: number;
   average_cadence?: number;
+  best_1h?: number;
+  best_20min?: number;
+  best_30s?: number;
+  best_5min?: number;
+  best_5s?: number;
   date_iso: string;
   detected_gear_name: string;
   distance: number;
@@ -117,6 +122,7 @@ export interface Activity {
   moving_time: number;
   moving_time_str: string;
   name: string;
+  norm_power?: number;
   start_date_local: string;
 }
 

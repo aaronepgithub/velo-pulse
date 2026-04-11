@@ -53,5 +53,11 @@ export const fitnessApi = {
     const response = await fetch(`${BASE_URL}/activity/${activityId}`);
     if (!response.ok) throw new Error('Failed to fetch activity details');
     return response.json();
+  },
+
+  detectGearForActivity: async (activityId: string | number): Promise<{ success: boolean; message?: string }> => {
+    const response = await fetch(`${BASE_URL}/detect-gear-for-activity/${activityId}`);
+    if (!response.ok) throw new Error('Failed to trigger gear detection');
+    return response.json();
   }
 };

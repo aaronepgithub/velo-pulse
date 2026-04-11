@@ -19,7 +19,8 @@ import {
   BrainCircuit,
   Clock,
   Heart,
-  Timer
+  Timer,
+  Trophy
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
@@ -934,20 +935,40 @@ const ActivityDetailView = () => {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<ActivityDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detectingGear, setDetectingGear] = useState(false);
+
+  const fetchData = async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const details = await fitnessApi.getActivityDetails(id);
+      setData(details);
+    } catch (error) {
+      console.error("Error fetching activity details:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDetectGear = async () => {
+    if (!id) return;
+    setDetectingGear(true);
+    try {
+      const result = await fitnessApi.detectGearForActivity(id);
+      if (result.success) {
+        await fetchData();
+      } else {
+        alert(result.message || "Failed to detect gear. Please ensure the FIT file is available in Dropbox.");
+      }
+    } catch (error) {
+      console.error("Error detecting gear:", error);
+      alert("An error occurred while detecting gear.");
+    } finally {
+      setDetectingGear(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (!id) return;
-      setLoading(true);
-      try {
-        const details = await fitnessApi.getActivityDetails(id);
-        setData(details);
-      } catch (error) {
-        console.error("Error fetching activity details:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, [id]);
 
@@ -994,7 +1015,25 @@ const ActivityDetailView = () => {
           <h2 className="text-3xl font-bold text-slate-900">{activity.name}</h2>
           <p className="text-slate-500 font-medium">{formatDisplayDate(activity.formatted_date || activity.start_date_local, true)}</p>
         </div>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap items-end gap-4">
+          <button
+            onClick={handleDetectGear}
+            disabled={detectingGear}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm transition-all border shadow-sm",
+              detectingGear 
+                ? "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed" 
+                : "bg-white text-blue-600 border-blue-100 hover:bg-blue-50 hover:border-blue-200"
+            )}
+          >
+            {detectingGear ? (
+              <div className="w-4 h-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            {detectingGear ? 'Analyzing...' : 'Detect Gear & Metrics'}
+          </button>
+          <div className="flex flex-wrap gap-4">
           <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Distance</p>
             <p className="text-xl font-bold text-slate-900">{activity.distance_miles.toFixed(2)} <span className="text-sm font-normal text-slate-500">mi</span></p>
@@ -1021,8 +1060,60 @@ const ActivityDetailView = () => {
               <p className="text-xl font-bold text-slate-900">{Math.round(activity.average_cadence)} <span className="text-sm font-normal text-slate-500">rpm</span></p>
             </div>
           )}
+          {activity.norm_power && (
+            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-blue-500" title="Normalized Power">
+              <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Norm Power</p>
+              <p className="text-xl font-bold text-slate-900">{Math.round(activity.norm_power)} <span className="text-sm font-normal text-slate-500">W</span></p>
+            </div>
+          )}
+          {activity.best_5s && (
+            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-orange-500" title="Best 5-Second Power">
+              <div className="flex items-center gap-1">
+                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Best 5s</p>
+                <Trophy className="w-3 h-3 text-orange-500" />
+              </div>
+              <p className="text-xl font-bold text-slate-900">{Math.round(activity.best_5s)} <span className="text-sm font-normal text-slate-500">W</span></p>
+            </div>
+          )}
+          {activity.best_30s && (
+            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-orange-400" title="Best 30-Second Power">
+              <div className="flex items-center gap-1">
+                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Best 30s</p>
+                <Trophy className="w-3 h-3 text-orange-400" />
+              </div>
+              <p className="text-xl font-bold text-slate-900">{Math.round(activity.best_30s)} <span className="text-sm font-normal text-slate-500">W</span></p>
+            </div>
+          )}
+          {activity.best_5min && (
+            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-amber-500" title="Best 5-Minute Power">
+              <div className="flex items-center gap-1">
+                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Best 5m</p>
+                <Trophy className="w-3 h-3 text-amber-500" />
+              </div>
+              <p className="text-xl font-bold text-slate-900">{Math.round(activity.best_5min)} <span className="text-sm font-normal text-slate-500">W</span></p>
+            </div>
+          )}
+          {activity.best_20min && (
+            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-amber-400" title="Best 20-Minute Power">
+              <div className="flex items-center gap-1">
+                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Best 20m</p>
+                <Trophy className="w-3 h-3 text-amber-400" />
+              </div>
+              <p className="text-xl font-bold text-slate-900">{Math.round(activity.best_20min)} <span className="text-sm font-normal text-slate-500">W</span></p>
+            </div>
+          )}
+          {activity.best_1h && (
+            <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm border-l-4 border-l-yellow-500" title="Best 1-Hour Power">
+              <div className="flex items-center gap-1">
+                <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Best 1h</p>
+                <Trophy className="w-3 h-3 text-yellow-500" />
+              </div>
+              <p className="text-xl font-bold text-slate-900">{Math.round(activity.best_1h)} <span className="text-sm font-normal text-slate-500">W</span></p>
+            </div>
+          )}
         </div>
-      </header>
+      </div>
+    </header>
 
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
         <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
