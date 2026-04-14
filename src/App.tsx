@@ -156,6 +156,8 @@ const Dashboard = () => {
   const [chainUsage, setChainUsage] = useState<ChainUsage | null>(null);
   const [activities, setActivities] = useState<ActivitiesResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -185,7 +187,41 @@ const Dashboard = () => {
     <div className="space-y-8 animate-in fade-in duration-500">
       <header>
         <h2 className="text-3xl font-bold text-slate-900">Welcome back, Aaron</h2>
-        <p className="text-slate-500">Here's what's happening with your fitness and gear.</p>
+        <div className="flex items-center gap-4">
+          <p className="text-slate-500">Here's what's happening with your fitness and gear.</p>
+          <div className="ml-2">
+            <button
+              onClick={async () => {
+                setSyncResult(null);
+                setSyncing(true);
+                try {
+                  // Request a full sync (not webhook mode)
+                  const res = await fitnessApi.syncStrava({ is_webhook: false });
+                  if (res?.success) {
+                    setSyncResult(res.summary || 'Sync completed successfully');
+                  } else {
+                    setSyncResult(res?.error || 'Sync completed with no summary');
+                  }
+                } catch (err: any) {
+                  setSyncResult(err?.message || String(err));
+                } finally {
+                  setSyncing(false);
+                }
+              }}
+              disabled={syncing}
+              className={cn(
+                "inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium",
+                syncing ? "bg-slate-200 text-slate-600" : "bg-blue-600 text-white hover:bg-blue-700"
+              )}
+            >
+              <Zap className="w-4 h-4" />
+              {syncing ? 'Syncing…' : 'Sync Strava'}
+            </button>
+          </div>
+        </div>
+        {syncResult && (
+          <div className="mt-3 p-3 bg-slate-50 rounded-md border border-slate-100 text-sm text-slate-700">{syncResult}</div>
+        )}
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

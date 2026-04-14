@@ -8,9 +8,12 @@ import {
   ActivityDetails
 } from '../types';
 
-const BASE_URL = import.meta.env.DEV 
-  ? '/api/v1' 
-  : 'https://aaronep.pythonanywhere.com/api/v1';
+// Allow overriding the API base during local development via VITE_API_BASE.
+// Fallback behavior: if VITE_API_BASE is set, use it. Otherwise use the previous behavior
+// (relative '/api/v1' in dev, full pythonanywhere URL in production).
+const BASE_URL = (
+  import.meta.env.VITE_API_BASE as string
+) || (import.meta.env.DEV ? '/api/v1' : 'https://aaronep.pythonanywhere.com/api/v1');
 
 export const fitnessApi = {
   getSegmentReport: async (): Promise<SegmentReport> => {
@@ -59,5 +62,17 @@ export const fitnessApi = {
     const response = await fetch(`${BASE_URL}/detect-gear-for-activity/${activityId}`);
     if (!response.ok) throw new Error('Failed to trigger gear detection');
     return response.json();
+  }
+  ,
+  syncStrava: async (opts?: { after_date?: string; is_webhook?: boolean }): Promise<any> => {
+    const response = await fetch(`${BASE_URL}/sync-strava`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // Default to full sync when not provided
+      body: JSON.stringify(opts ?? { is_webhook: false })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data?.error || 'Failed to sync Strava');
+    return data;
   }
 };
