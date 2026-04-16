@@ -155,6 +155,8 @@ const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) 
 const Dashboard = () => {
   const [chainUsage, setChainUsage] = useState<ChainUsage | null>(null);
   const [activities, setActivities] = useState<ActivitiesResponse | null>(null);
+  const [bikeUsage, setBikeUsage] = useState<BikeUsage | null>(null);
+  const [segmentData, setSegmentData] = useState<SegmentReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
@@ -162,12 +164,16 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [chain, acts] = await Promise.all([
+        const [chain, acts, usage, segments] = await Promise.all([
           fitnessApi.getChainUsage(),
-          fitnessApi.getActivities(1, 5)
+          fitnessApi.getActivities(1, 10),
+          fitnessApi.getBicycleUsage(),
+          fitnessApi.getSegmentReport()
         ]);
         setChainUsage(chain);
         setActivities(acts);
+        setBikeUsage(usage);
+        setSegmentData(segments);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
@@ -183,8 +189,29 @@ const Dashboard = () => {
     bike.miles_since_replacement > 2000 || bike.miles_since_wax > 200
   ) || [];
 
+  // Calculate current month miles per bike
+  const currentMonth = new Date().toISOString().substring(0, 7);
+  const currentYear = new Date().getFullYear().toString();
+  
+  const currentMonthBikeUsage = bikeUsage ? Object.entries(bikeUsage).map(([name, data]) => {
+    const yearData = data.years[currentYear];
+    const monthData = yearData?.months[currentMonth];
+    return {
+      name,
+      miles: monthData?.distance || 0,
+      activities: monthData?.activities || 0
+    };
+  }).filter(b => b.miles > 0) : [];
+
+  // Get recent segments
+  const recentSegments = segmentData ? Object.values(segmentData).flatMap(bucket => 
+    Object.entries(bucket).flatMap(([name, efforts]) => 
+      efforts.map(e => ({ name, ...e }))
+    )
+  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5) : [];
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-10 animate-in fade-in duration-500 pb-12">
       <header>
         <h2 className="text-3xl font-bold text-slate-900">Welcome back, Aaron</h2>
         <div className="flex items-center gap-4">
@@ -195,7 +222,6 @@ const Dashboard = () => {
                 setSyncResult(null);
                 setSyncing(true);
                 try {
-                  // Request a full sync (not webhook mode)
                   const res = await fitnessApi.syncStrava({ is_webhook: false });
                   if (res?.success) {
                     setSyncResult(res.summary || 'Sync completed successfully');
@@ -224,93 +250,16 @@ const Dashboard = () => {
         )}
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Maintenance Status */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              <Wrench className="w-5 h-5 text-blue-600" />
-              Maintenance Status
-            </h3>
-            <Link to="/maintenance" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-              View all <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-          
-          <div className="space-y-4">
-            {chainUsage?.main_bikes?.map(bike => (
-              <div key={bike.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
-                <div className="flex items-center gap-4">
-                  <div className={cn(
-                    "w-10 h-10 rounded-full flex items-center justify-center",
-                    bike.miles_since_replacement > 2000 ? "bg-red-100 text-red-600" : "bg-green-100 text-green-600"
-                  )}>
-                    <Bike className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-900">{bike.name}</p>
-                    <p className="text-xs text-slate-500">Last wax: {bike.last_chain_wax}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-slate-900">{Math.round(bike.miles_since_replacement)} mi</p>
-                  <p className="text-xs text-slate-500">on current chain</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="space-y-6">
-          <div className="bg-blue-600 rounded-2xl p-6 text-white shadow-lg shadow-blue-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-blue-500 rounded-lg">
-                <Calendar className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-bold uppercase tracking-wider opacity-80">Last 365 Days</span>
-            </div>
-            <p className="text-3xl font-bold mb-1">
-              {(chainUsage?.main_bikes || []).reduce((acc, b) => acc + (b.miles_last_year || 0), 0).toLocaleString()}
-            </p>
-            <p className="text-sm opacity-80">Total miles tracked</p>
-          </div>
-
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Maintenance Alerts</h3>
-            {maintenanceAlerts.length > 0 ? (
-              <div className="space-y-3">
-                {maintenanceAlerts.map(bike => (
-                  <div key={bike.id} className="flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                    <div>
-                      <p className="text-sm font-bold text-amber-900">{bike.name}</p>
-                      <p className="text-xs text-amber-700">
-                        {bike.miles_since_wax > 200 ? "Chain needs waxing" : "Chain replacement approaching"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-4 text-slate-400">
-                <CheckCircle2 className="w-8 h-8 mb-2 text-green-500" />
-                <p className="text-sm">All gear is in top shape!</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activities */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+      {/* 1. Recent Activities */}
+      <section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold flex items-center gap-2">
+          <h3 className="text-lg font-bold flex items-center gap-2 text-slate-800">
             <History className="w-5 h-5 text-blue-600" />
             Recent Activities
           </h3>
-          <Link to="/activities" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-            View all <ChevronRight className="w-4 h-4" />
+          <Link to="/activities" className="text-sm font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 group">
+            View all Activities
+            <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </Link>
         </div>
         <div className="overflow-x-auto">
@@ -327,16 +276,16 @@ const Dashboard = () => {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {activities?.activities?.map(activity => (
-                <tr key={activity.id} className="group hover:bg-slate-50 transition-colors">
+                <tr key={activity.id} className="group hover:bg-slate-50/50 transition-colors">
                   <td className="py-4 px-2">
-                    <Link to={`/activity/${activity.id}`} className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                    <Link to={`/activity/${activity.id}`} className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors block">
                       {activity.name}
                     </Link>
                   </td>
-                  <td className="py-4 px-2 text-sm text-slate-500">{activity.formatted_date}</td>
-                  <td className="py-4 px-2 text-sm font-medium text-slate-700">{activity.distance_miles.toFixed(1)} mi</td>
+                  <td className="py-4 px-2 text-sm text-slate-500 whitespace-nowrap">{activity.formatted_date}</td>
+                  <td className="py-4 px-2 text-sm font-bold text-slate-700">{activity.distance_miles.toFixed(1)} mi</td>
                   <td className="py-4 px-2">
-                    <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs font-medium">
+                    <span className="px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md text-[10px] uppercase font-bold tracking-wider">
                       {activity.gear_name}
                     </span>
                   </td>
@@ -346,6 +295,131 @@ const Dashboard = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      {/* 2. Recent Segments */}
+      <section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-bold flex items-center gap-2 text-slate-800">
+            <Trophy className="w-5 h-5 text-amber-500" />
+            Recent Segments
+          </h3>
+          <Link to="/comparison" className="text-sm font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 group">
+            Compare Gear
+            <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          {recentSegments.map((effort, idx) => (
+            <div key={`${effort.name}-${idx}`} className="p-4 bg-slate-50 rounded-xl border border-slate-100/80 hover:border-blue-200 transition-all">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 truncate" title={effort.name}>{effort.name}</p>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xl font-bold text-slate-900">{Math.round(effort.average_watts || 0)}W</span>
+                <span className="text-xs font-medium text-slate-500">{effort.rank ? `#${effort.rank}` : '--'}</span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium">
+                {new Date(effort.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} • {effort.gear}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* 3. Current Month Bike Usage */}
+        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-bold flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-600" />
+              {new Date().toLocaleString('default', { month: 'long' })} Usage
+            </h3>
+            <Link to="/usage" className="text-sm font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 group">
+              Full Usage History
+              <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {currentMonthBikeUsage.length > 0 ? (
+              currentMonthBikeUsage.map(bike => (
+                <div key={bike.name} className="p-5 bg-gradient-to-br from-slate-50 to-white rounded-2xl border border-slate-100 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center">
+                      <Bike className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-slate-900">{bike.name}</h4>
+                      <p className="text-xs text-slate-500">{bike.activities} rides this month</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-black text-slate-900">{Math.round(bike.miles)}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Miles</p>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-2 py-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <p className="text-sm text-slate-500">No miles logged yet this month.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          {/* 4. Last 12 Months Miles */}
+          <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-xl shadow-slate-200 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-4 opacity-10 transition-transform group-hover:scale-110">
+              <TrendingUp className="w-24 h-24" />
+            </div>
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-8">
+                <div className="p-2 bg-slate-800 rounded-lg">
+                  <ActivityIcon className="w-5 h-5 text-blue-400" />
+                </div>
+                <Link to="/maintenance" className="text-[10px] font-bold uppercase tracking-widest text-blue-400 hover:text-blue-300 transition-colors border border-blue-400/30 rounded-full px-3 py-1 bg-blue-400/5">
+                  Gear Status
+                </Link>
+              </div>
+              <p className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-1">Trailing 12 Months</p>
+              <p className="text-4xl font-black mb-1">
+                {(chainUsage?.main_bikes || []).reduce((acc, b) => acc + (b.miles_last_year || 0), 0).toLocaleString()}
+                <span className="text-lg font-bold text-slate-500 ml-2">mi</span>
+              </p>
+              <p className="text-xs text-slate-500">Total distance across all primary gear</p>
+            </div>
+          </div>
+
+          {/* 5. Maintenance Alerts */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Maintenance Alerts</h3>
+              <Wrench className="w-4 h-4 text-slate-300" />
+            </div>
+            {maintenanceAlerts.length > 0 ? (
+              <div className="space-y-3">
+                {maintenanceAlerts.map(bike => (
+                  <div key={bike.id} className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-amber-900">{bike.name}</p>
+                      <p className="text-[11px] text-amber-700 font-medium">
+                        {bike.miles_since_wax > 200 ? "Chain needs waxing" : "Chain replacement approaching"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-6 text-slate-400">
+                <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mb-3">
+                  <CheckCircle2 className="w-6 h-6 text-green-500" />
+                </div>
+                <p className="text-xs font-bold text-slate-900">System Nominal</p>
+                <p className="text-[10px] text-slate-500 mt-1">All gear is in optimal condition</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
