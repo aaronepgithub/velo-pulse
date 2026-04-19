@@ -40,7 +40,15 @@ export interface SpeedTrendBucket {
   gears: {
     [bikeName: string]: SpeedTrendGear;
   };
-  summary: {
+  summary?: {
+    fastest_gear: string;
+    performance: SpeedTrendSummaryPerformance[];
+  };
+  summary_12m?: {
+    fastest_gear: string;
+    performance: SpeedTrendSummaryPerformance[];
+  };
+  summary_all?: {
     fastest_gear: string;
     performance: SpeedTrendSummaryPerformance[];
   };

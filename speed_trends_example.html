@@ -1,0 +1,454 @@
+{% extends "base.html" %}
+{% block title %}Speed Trends | Strava App{% endblock %}
+{% block header_title %}Speed Trends{% endblock %}
+
+{% block extra_head %}
+<!-- Alpine.js Plugins -->
+<script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
+<!-- Alpine.js Core -->
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Lucide Icons -->
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+    /* Custom scrollbar for horizontal buckets */
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    /* Animation for card expansion */
+    .expand-enter { max-height: 0; opacity: 0; }
+    .expand-enter-active { max-height: 1000px; opacity: 1; transition: all 0.3s ease-out; }
+    .expand-exit { max-height: 1000px; opacity: 1; }
+    .expand-exit-active { max-height: 0; opacity: 0; transition: all 0.2s ease-in; }
+
+    /* Chart tooltips styling */
+    .chartjs-tooltip {
+        background: rgba(255, 255, 255, 0.95);
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 8px 12px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        font-family: 'Inter', sans-serif;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<script>
+    // Define the data in JS context to avoid HTML attribute quote clashing
+    const initialTrendsData = {{ trends|tojson|safe }};
+    const firstBucketName = '{{ trends.keys()|first if trends else "" }}';
+
+    // Helper functions for Alpine component
+    function speedTrendsData() {
+        return { 
+            activeBucket: firstBucketName,
+            timeframe: '12m', // '12m' or 'all'
+            trends: initialTrendsData,
+            expandedGears: {},
+            get currentBucketData() { return this.trends[this.activeBucket] || null },
+            get currentSummary() {
+                if (!this.currentBucketData) return null;
+                return this.timeframe === 'all' ? this.currentBucketData.summary_all : this.currentBucketData.summary_12m;
+            },
+            get bucketParts() {
+                if (!this.activeBucket) return {dist: '', grade: ''};
+                const parts = this.activeBucket.split(' / ');
+                return { dist: parts[0], grade: parts[1] };
+            },
+            toggleGear(gear) {
+                this.expandedGears[gear] = !this.expandedGears[gear];
+            },
+            init() {
+                this.$watch('activeBucket', value => onBucketChange(value));
+                onBucketChange(this.activeBucket);
+            }
+        };
+    }
+
+    // Helper to group efforts for segment breakdown
+    function groupEffortsBySegment(efforts) {
+        const groups = {};
+        if (!efforts) return groups;
+        efforts.forEach(e => {
+            if (!groups[e.segment_name]) groups[e.segment_name] = [];
+            groups[e.segment_name].push(e);
+        });
+        return groups;
+    }
+
+    function calculateAvg(efforts) {
+        if (!efforts || !efforts.length) return 0;
+        return efforts.reduce((sum, e) => sum + e.speed, 0) / efforts.length;
+    }
+
+    // Chart initialization logic
+    let charts = {};
+
+    function initChartsForBucket(bucketData) {
+        // Destroy existing charts
+        Object.values(charts).forEach(c => c.destroy());
+        charts = {};
+
+        if (!bucketData || !bucketData.gears) return;
+
+        // Initialize charts after Alpine renders
+        setTimeout(() => {
+            if (window.lucide) lucide.createIcons();
+            
+            Object.entries(bucketData.gears).forEach(([gearName, gearData]) => {
+                const canvasId = 'trend-chart-' + gearName.replace(/ /g, '-');
+                const ctx = document.getElementById(canvasId);
+                if (!ctx) return;
+
+                const efforts = [...gearData.efforts].sort((a,b) => a.timestamp - b.timestamp);
+                
+                // Main Trend Chart
+                charts[canvasId] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: efforts.map(e => e.date),
+                        datasets: [
+                            {
+                                label: 'Trendline',
+                                data: gearData.trendline,
+                                borderColor: '#94a3b8',
+                                borderDash: [5, 5],
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                fill: false,
+                                order: 1
+                            },
+                            {
+                                label: 'Speed',
+                                data: efforts.map(e => e.speed),
+                                borderColor: '#6366f1',
+                                backgroundColor: '#6366f1',
+                                borderWidth: 3,
+                                pointRadius: 4,
+                                pointHoverRadius: 6,
+                                tension: 0.1,
+                                order: 2
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                titleColor: '#1e293b',
+                                bodyColor: '#475569',
+                                titleFont: { weight: 'bold', size: 12 },
+                                bodyFont: { size: 12 },
+                                borderColor: '#e2e8f0',
+                                borderWidth: 1,
+                                padding: 10,
+                                callbacks: {
+                                    label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} mph`,
+                                    title: (items) => {
+                                        const effort = efforts[items[0].dataIndex];
+                                        return `${effort.date} • ${effort.segment_name}`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                grid: { color: '#f1f5f9' },
+                                ticks: { font: { family: 'JetBrains Mono', size: 10 } },
+                                title: { display: true, text: 'SPEED (MPH)', font: { size: 10, weight: 'bold', family: 'Inter' }, color: '#94a3b8' }
+                            },
+                            x: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+
+                // Per-Segment Breakdown Charts
+                const segmentEfforts = groupEffortsBySegment(gearData.efforts);
+                Object.entries(segmentEfforts).forEach(([segName, efforts]) => {
+                    const segCanvasId = 'seg-chart-' + gearName.replace(/ /g, '-') + '-' + segName.replace(/ /g, '-');
+                    const segCtx = document.getElementById(segCanvasId);
+                    if (!segCtx) return;
+
+                    const sorted = [...efforts].sort((a,b) => a.timestamp - b.timestamp);
+
+                    charts[segCanvasId] = new Chart(segCtx, {
+                        type: 'scatter',
+                        data: {
+                            datasets: [
+                                {
+                                    label: 'Speed',
+                                    data: sorted.map(e => ({ x: e.timestamp * 1000, y: e.speed })),
+                                    backgroundColor: '#818cf8',
+                                    pointRadius: 3
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { 
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (ctx) => `${ctx.parsed.y.toFixed(2)} mph`,
+                                        title: (items) => {
+                                            const d = new Date(items[0].parsed.x);
+                                            return d.toLocaleDateString();
+                                        }
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: { display: false },
+                                y: {
+                                    grid: { color: '#f1f5f9' },
+                                    ticks: { font: { size: 9 }, callback: (v) => v.toFixed(0) }
+                                }
+                            }
+                        }
+                    });
+                });
+            });
+        }, 50);
+    }
+
+    // Manual hook for bucket changes
+    function onBucketChange(bucketName) {
+        initChartsForBucket(initialTrendsData[bucketName]);
+    }
+
+</script>
+
+<div x-data="speedTrendsData()" class="max-w-6xl mx-auto space-y-8">
+
+    <!-- Page Header (Premium Style) -->
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <div>
+            <div class="inline-flex items-center space-x-2 text-indigo-600 font-semibold tracking-wider uppercase text-xs mb-1">
+                <span class="w-2 h-2 rounded-full bg-indigo-600"></span>
+                <span>Speed Performance</span>
+            </div>
+            <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight mb-2">Are you getting faster?</h2>
+            <p class="text-lg text-gray-600 max-w-2xl">Per-bike trends broken down by segment and conditions. See how your equipment performance evolves over time.</p>
+        </div>
+
+        <!-- Timeframe Toggle -->
+        <div class="flex p-1 bg-gray-100 rounded-xl self-start md:self-auto">
+            <button 
+                @click="timeframe = '12m'"
+                :class="timeframe === '12m' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200"
+            >
+                Past 12 Months
+            </button>
+            <button 
+                @click="timeframe = 'all'"
+                :class="timeframe === 'all' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-bold rounded-lg transition-all duration-200"
+            >
+                All Time
+            </button>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="bg-red-50 border-l-4 border-red-400 p-4 rounded-md">
+        <div class="flex">
+            <div class="flex-shrink-0"><i data-lucide="alert-circle" class="h-5 w-5 text-red-400"></i></div>
+            <div class="ml-3"><p class="text-sm text-red-700">{{ error }}</p></div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not trends %}
+    <div class="text-center py-20 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+        <i data-lucide="line-chart" class="h-12 w-12 text-gray-300 mx-auto mb-4"></i>
+        <h3 class="text-lg font-medium text-gray-900">No trend data available</h3>
+        <p class="text-gray-500 max-w-xs mx-auto mt-1">Complete more starred segment efforts on your bikes to see speed performance analysis.</p>
+    </div>
+    {% else %}
+    
+    <!-- Bucket Navigation Tabs -->
+    <div class="flex gap-2 overflow-x-auto hide-scrollbar -mx-5 px-5 lg:mx-0 lg:px-0 pb-2 mb-4">
+        {% for bucket in trends.keys() %}
+        <button 
+            @click="activeBucket = '{{ bucket }}'"
+            :class="activeBucket === '{{ bucket }}' ? 'bg-gray-900 text-white border-gray-900 shadow-md' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'"
+            class="shrink-0 text-left px-5 py-3 rounded-xl border transition-all duration-200 min-w-[140px]"
+        >
+            {% set parts = bucket.split(' / ') %}
+            <div class="text-[10px] uppercase tracking-widest opacity-70 font-bold mb-0.5">{{ parts[0] }}</div>
+            <div class="text-sm font-semibold">{{ parts[1] }}</div>
+        </button>
+        {% endfor %}
+    </div>
+
+    <!-- Bucket Content Area -->
+    <div x-show="activeBucket" x-transition:enter="transition ease-out duration-300 transform" x-transition:enter-start="opacity-0 translate-y-4" x-transition:enter-end="opacity-100 translate-y-0" class="space-y-6">
+        
+        <!-- Fastest Gear Banner -->
+        <template x-if="currentSummary && currentSummary.fastest_gear">
+            <div class="bg-gradient-to-r from-indigo-50 to-white rounded-2xl border border-indigo-100 p-6 flex flex-wrap items-center gap-6 shadow-sm">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                        <i data-lucide="trophy" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="text-[11px] uppercase tracking-widest text-indigo-500 font-bold mb-0.5">Fastest Equipment</div>
+                        <div class="text-2xl font-bold text-gray-900" x-text="currentSummary.fastest_gear"></div>
+                    </div>
+                </div>
+
+                <div class="flex gap-8 ml-auto items-center">
+                    <template x-for="perf in currentSummary.performance" :key="perf.gear">
+                        <div class="text-right">
+                            <div class="text-[10px] uppercase tracking-widest text-gray-500 font-semibold mb-1" x-text="perf.gear"></div>
+                            <div class="font-bold text-xl tabular-nums text-gray-900">
+                                <span x-text="perf.average_speed.toFixed(2)"></span>
+                                <span class="text-xs text-gray-400 font-medium ml-1">mph avg</span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- Segment List Info -->
+        <template x-if="currentBucketData && currentBucketData.segments && currentBucketData.segments.length > 0">
+            <div class="bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+                <div class="flex items-center gap-2 mb-2 text-gray-500">
+                    <i data-lucide="info" class="w-4 h-4"></i>
+                    <span class="text-xs font-semibold uppercase tracking-wider">Included Segments</span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <template x-for="seg in currentBucketData.segments" :key="seg">
+                        <span class="px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 shadow-sm" x-text="seg"></span>
+                    </template>
+                </div>
+            </div>
+        </template>
+
+        <!-- Gear Cards Grid -->
+        <div class="space-y-4">
+            <template x-for="(gearData, gearName) in (currentBucketData ? currentBucketData.gears : {})" :key="gearName">
+                <div class="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all duration-300" 
+                     :class="expandedGears[gearName] !== false ? 'ring-1 ring-indigo-100 shadow-md' : 'hover:border-gray-300'">
+                    
+                    <!-- Card Header / Toggle -->
+                    <button 
+                        @click="toggleGear(gearName)"
+                        class="w-full flex items-center gap-4 p-5 lg:p-6 text-left hover:bg-gray-50/50 transition-colors"
+                    >
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-3">
+                                <h3 class="text-xl font-bold text-gray-900 truncate" x-text="gearName"></h3>
+                                <template x-if="currentSummary && gearName === currentSummary.fastest_gear">
+                                    <span class="p-1 rounded-full bg-green-100 text-green-600" title="Fastest gear in this category">
+                                        <i data-lucide="trophy" class="w-3.5 h-3.5"></i>
+                                    </span>
+                                </template>
+                            </div>
+                            <div class="flex items-center gap-2 mt-1.5">
+                                <span :class="{
+                                    'text-green-600 bg-green-50': gearData.description.includes('increase'),
+                                    'text-red-600 bg-red-50': gearData.description.includes('decrease'),
+                                    'text-gray-500 bg-gray-50': !gearData.description.includes('increase') && !gearData.description.includes('decrease')
+                                }" class="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-bold ring-1 ring-inset">
+                                    <template x-if="gearData.description.includes('increase')"><i data-lucide="trending-up" class="w-3 h-3"></i></template>
+                                    <template x-if="gearData.description.includes('decrease')"><i data-lucide="trending-down" class="w-3 h-3"></i></template>
+                                    <template x-if="!gearData.description.includes('increase') && !gearData.description.includes('decrease')"><i data-lucide="minus" class="w-3 h-3"></i></template>
+                                    <span x-text="gearData.description"></span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="text-right shrink-0 px-4 border-r border-gray-100 hidden sm:block">
+                            <div class="text-[10px] uppercase tracking-widest text-gray-400 font-bold">3-mo Prediction</div>
+                            <div class="font-mono text-sm font-bold text-gray-700 pt-0.5" x-text="gearData.prediction.replace('Predicted speed in 3 months: ', '') || '—'"></div>
+                        </div>
+
+                        <div class="shrink-0 p-2 rounded-lg bg-gray-50 text-gray-400 group">
+                            <i data-lucide="chevron-down" class="w-5 h-5 transition-transform duration-300" :class="expandedGears[gearName] !== false ? 'rotate-180' : ''"></i>
+                        </div>
+                    </button>
+
+                    <!-- Expanded Content -->
+                    <div x-show="expandedGears[gearName] !== false" 
+                         x-collapse
+                         class="border-t border-gray-100 p-6 lg:p-8 space-y-10">
+                        
+                        <!-- Main Trend Chart -->
+                        <div>
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center gap-2 text-gray-500">
+                                    <i data-lucide="activity" class="w-4 h-4 text-indigo-500"></i>
+                                    <span class="text-xs font-bold uppercase tracking-widest">Chronological Speed Trend</span>
+                                </div>
+                                <div class="flex items-center gap-4 text-[10px] font-bold uppercase tracking-tighter">
+                                    <span class="flex items-center gap-1.5 text-gray-500">
+                                        <span class="w-3 h-3 rounded-full bg-indigo-500"></span> Efforts
+                                    </span>
+                                    <span class="flex items-center gap-1.5 text-gray-400">
+                                        <span class="w-8 h-0.5 border-t border-dashed border-gray-400"></span> Trendline
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div class="h-64 relative bg-gray-50/30 rounded-xl p-4">
+                                <canvas :id="'trend-chart-' + gearName.replace(/ /g, '-')" class="w-full h-full"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Per-Segment Breakdown -->
+                        <div>
+                            <div class="flex items-center gap-2 mb-6 text-gray-500">
+                                <i data-lucide="layers" class="w-4 h-4 text-indigo-500"></i>
+                                <span class="text-xs font-bold uppercase tracking-widest">Performance by Segment</span>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <template x-for="[segName, efforts] in Object.entries(groupEffortsBySegment(gearData.efforts))" :key="segName">
+                                    <div class="bg-gray-50/50 rounded-2xl p-4 border border-gray-100 hover:border-gray-200 transition-colors">
+                                        <div class="flex items-center justify-between gap-3 mb-4">
+                                            <div class="flex items-center gap-2 truncate">
+                                                <div class="w-2 h-2 rounded-full bg-indigo-400"></div>
+                                                <span class="text-xs font-bold text-gray-700 truncate" x-text="segName"></span>
+                                            </div>
+                                            <div class="flex items-center gap-3 text-[10px] font-mono text-gray-500 whitespace-nowrap">
+                                                <span>avg <span class="text-gray-900 font-bold" x-text="calculateAvg(efforts).toFixed(1) + ' mph'"></span></span>
+                                                <span class="hidden sm:inline" x-text="efforts.length + ' efforts'"></span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="h-24">
+                                            <canvas :id="'seg-chart-' + gearName.replace(/ /g, '-') + '-' + segName.replace(/ /g, '-')" class="w-full h-full"></canvas>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="mt-12 flex items-center justify-center gap-6">
+        <a href="/" class="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-indigo-600 transition-colors">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            Back to Dashboard
+        </a>
+        <span class="w-1 h-1 rounded-full bg-gray-300"></span>
+        <a href="/power-trends" class="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-teal-600 transition-colors">
+            Power Performance Analysis
+            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </a>
+    </div>
+</div>
+{% endblock %}

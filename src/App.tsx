@@ -20,7 +20,15 @@ import {
   Clock,
   Heart,
   Timer,
-  Trophy
+  Trophy,
+  Layers,
+  TrendingDown,
+  Minus,
+  Info,
+  ChevronDown,
+  ChevronUp,
+  ArrowLeft,
+  ArrowRight
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import { motion, AnimatePresence } from 'motion/react';
@@ -37,36 +45,8 @@ import {
   ActivityDetails,
   RankingInfo
 } from './types';
-import { cn } from './lib/utils';
-// Utilities
-export const formatDisplayDate = (dateStr: string | undefined, full = false) => {
-  if (!dateStr) return '';
-  
-  // If it's a standard activity.formatted_date: YYYY-MM-DD HH:MM
-  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/);
-  let date: Date;
-  
-  if (match) {
-    const [_, year, month, day, hour, minute] = match;
-    date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hour), parseInt(minute));
-  } else {
-    // If it's ISO, remove 'Z' to treat as literal local time if 'Z' is present
-    const cleanDateStr = dateStr.includes('T') ? dateStr.replace('Z', '') : dateStr;
-    date = new Date(cleanDateStr);
-  }
+import { cn, formatDisplayDate } from './lib/utils';
 
-  if (isNaN(date.getTime())) return dateStr;
-
-  return date.toLocaleString('en-US', { 
-    weekday: full ? 'long' : undefined, 
-    year: 'numeric', 
-    month: full ? 'long' : 'short', 
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
-};
 
 // Components
 const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
@@ -432,6 +412,8 @@ const Comparison = () => {
   const [speedTrends, setSpeedTrends] = useState<SpeedTrends | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedBucket, setSelectedBucket] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<'12m' | 'all'>('12m');
+  const [expandedGears, setExpandedGears] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -443,7 +425,11 @@ const Comparison = () => {
         setSegmentReport(report);
         setSpeedTrends(trends);
         if (Object.keys(trends).length > 0) {
-          setSelectedBucket(Object.keys(trends)[0]);
+          const firstBucket = Object.keys(trends)[0];
+          setSelectedBucket(firstBucket);
+          // Auto-expand the first gear in the first bucket
+          const firstGear = Object.keys(trends[firstBucket].gears)[0];
+          if (firstGear) setExpandedGears(new Set([firstGear]));
         }
       } catch (error) {
         console.error("Error fetching comparison data:", error);
@@ -454,102 +440,372 @@ const Comparison = () => {
     fetchData();
   }, []);
 
-  if (loading) return <div className="flex items-center justify-center h-full">Loading comparison data...</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+      <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <p className="text-slate-500 font-medium">Analyzing speed performance...</p>
+    </div>
+  );
+
+  if (!speedTrends || Object.keys(speedTrends).length === 0) {
+    return (
+      <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 animate-in fade-in duration-500">
+        <TrendingUp className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+        <h3 className="text-lg font-bold text-slate-900">No trend data available</h3>
+        <p className="text-slate-500 max-w-xs mx-auto mt-2 font-medium">
+          Complete more segment efforts on your bikes to see speed performance analysis.
+        </p>
+      </div>
+    );
+  }
 
   const currentBucketData = selectedBucket ? speedTrends?.[selectedBucket] : null;
+  const currentSummary = currentBucketData ? (
+    timeframe === 'all' 
+      ? (currentBucketData.summary_all || currentBucketData.summary) 
+      : (currentBucketData.summary_12m || currentBucketData.summary)
+  ) : null;
+
+  const toggleGear = (gear: string) => {
+    const next = new Set(expandedGears);
+    if (next.has(gear)) next.delete(gear);
+    else next.add(gear);
+    setExpandedGears(next);
+  };
+
+  const groupEffortsBySegment = (efforts: any[]) => {
+    const groups: { [key: string]: any[] } = {};
+    efforts.forEach(e => {
+      if (!groups[e.segment_name]) groups[e.segment_name] = [];
+      groups[e.segment_name].push(e);
+    });
+    return groups;
+  };
+
+  const calculateAvgSpeed = (efforts: any[]) => {
+    if (!efforts.length) return 0;
+    return efforts.reduce((sum, e) => sum + e.speed, 0) / efforts.length;
+  };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <header>
-        <h2 className="text-3xl font-bold text-slate-900">Bike Comparison</h2>
-        <p className="text-slate-500">Analyze how your different bikes perform across various terrain types.</p>
-      </header>
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div>
+          <div className="inline-flex items-center gap-2 text-blue-600 font-bold tracking-wider uppercase text-[10px] mb-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+            Speed Performance
+          </div>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tight mb-2">Are you getting faster?</h2>
+          <p className="text-lg text-slate-500 max-w-2xl font-medium">
+            Per-bike trends broken down by segment and conditions. See how your equipment performance evolves.
+          </p>
+        </div>
 
-      <div className="flex flex-wrap gap-2">
-        {Object.keys(speedTrends || {}).map(bucket => (
-          <button
-            key={bucket}
-            onClick={() => setSelectedBucket(bucket)}
+        {/* Timeframe Toggle */}
+        <div className="flex p-1 bg-slate-100 rounded-xl self-start md:self-auto border border-slate-200 shadow-sm">
+          <button 
+            onClick={() => setTimeframe('12m')}
             className={cn(
-              "px-4 py-2 rounded-full text-sm font-medium transition-all",
-              selectedBucket === bucket
-                ? "bg-blue-600 text-white shadow-md"
-                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+              "px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200",
+              timeframe === '12m' ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-700"
             )}
           >
-            {bucket}
+            Past 12 Months
           </button>
-        ))}
+          <button 
+            onClick={() => setTimeframe('all')}
+            className={cn(
+              "px-4 py-2 text-xs font-bold rounded-lg transition-all duration-200",
+              timeframe === 'all' ? "bg-white text-slate-900 shadow-sm border border-slate-200" : "text-slate-500 hover:text-slate-700"
+            )}
+          >
+            All Time
+          </button>
+        </div>
+      </div>
+
+      {/* Bucket Navigation */}
+      <div className="flex gap-3 overflow-x-auto pb-4 hide-scrollbar -mx-4 px-4 md:mx-0 md:px-0">
+        {Object.keys(speedTrends).map(bucket => {
+          const [dist, grade] = bucket.split(' / ');
+          const isActive = selectedBucket === bucket;
+          return (
+            <button
+              key={bucket}
+              onClick={() => setSelectedBucket(bucket)}
+              className={cn(
+                "shrink-0 text-left px-5 py-3 rounded-2xl border-2 transition-all duration-300 min-w-[160px]",
+                isActive 
+                  ? "bg-slate-950 text-white border-slate-950 shadow-xl shadow-slate-200 translate-y-[-2px]" 
+                  : "bg-white text-slate-600 border-slate-100 hover:border-slate-300 hover:shadow-md"
+              )}
+            >
+              <div className={cn("text-[9px] uppercase tracking-widest font-black mb-1", isActive ? "text-blue-400" : "text-slate-400")}>{dist}</div>
+              <div className="text-sm font-bold">{grade}</div>
+            </button>
+          );
+        })}
       </div>
 
       {currentBucketData && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Performance Summary */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-              <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                <Gauge className="w-5 h-5 text-blue-600" />
-                Speed Performance
-              </h3>
-              <div className="space-y-6">
-                {currentBucketData?.summary?.performance?.map((perf, idx) => (
-                  <div key={perf.gear} className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-bold text-slate-700">{perf.gear}</span>
-                      <span className="text-slate-500 font-medium">{perf.average_speed.toFixed(2)} mph</span>
-                    </div>
-                    <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(perf.average_speed / currentBucketData.summary.performance[0].average_speed) * 100}%` }}
-                        className={cn(
-                          "h-full rounded-full",
-                          idx === 0 ? "bg-blue-600" : "bg-slate-400"
-                        )}
-                      />
+        <div className="space-y-6">
+          {/* Fastest Gear Banner */}
+          {currentSummary && (
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl p-8 flex flex-wrap items-center gap-10 shadow-2xl shadow-blue-200 text-white relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-8 opacity-10 transition-transform group-hover:scale-110 duration-500">
+                <Trophy className="w-32 h-32" />
+              </div>
+              
+              <div className="relative z-10 flex items-center gap-6">
+                <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                  <Trophy className="w-8 h-8 text-yellow-400" />
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-blue-200 font-black mb-1">Fastest Equipment</div>
+                  <div className="text-3xl font-black">{currentSummary.fastest_gear}</div>
+                </div>
+              </div>
+
+              <div className="relative z-10 flex gap-12 ml-auto items-center">
+                {currentSummary.performance.map(perf => (
+                  <div key={perf.gear} className="text-right">
+                    <div className="text-[10px] uppercase tracking-widest text-blue-200 font-bold mb-1 opacity-70">{perf.gear}</div>
+                    <div className="font-black text-3xl tabular-nums">
+                      {perf.average_speed.toFixed(2)}
+                      <span className="text-[10px] text-blue-300 font-bold ml-1 uppercase tracking-wider">mph</span>
                     </div>
                   </div>
                 ))}
               </div>
-              <div className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-100">
-                <p className="text-sm text-blue-900">
-                  <span className="font-bold">Fastest Gear:</span> {currentBucketData.summary.fastest_gear}
-                </p>
-              </div>
             </div>
+          )}
 
-            {/* Gear Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {Object.entries(currentBucketData?.gears || {}).map(([gearName, details]: [string, any]) => (
-                <div key={gearName} className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200">
-                  <h4 className="font-bold text-slate-900 mb-2">{gearName}</h4>
-                  <p className="text-sm text-slate-500 mb-4">{details.description}</p>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Prediction</p>
-                    <p className="text-sm text-slate-700">{details.prediction}</p>
-                  </div>
-                </div>
+          {/* Included Segments info */}
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/60 flex items-center gap-4">
+            <div className="flex items-center gap-2 text-slate-400 shrink-0">
+              <Info className="w-4 h-4" />
+              <span className="text-[10px] font-black uppercase tracking-wider">Included Segments</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {currentBucketData.segments.map(seg => (
+                <span key={seg} className="px-3 py-1 bg-white border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 shadow-sm">
+                  {seg}
+                </span>
               ))}
             </div>
           </div>
 
-          {/* Segments in this bucket */}
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 h-fit">
-            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-              <ActivityIcon className="w-5 h-5 text-blue-600" />
-              Analyzed Segments
-            </h3>
-            <ul className="space-y-3">
-              {currentBucketData?.segments?.map(segment => (
-                <li key={segment} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl text-sm text-slate-700 font-medium border border-slate-100">
-                  <div className="w-2 h-2 rounded-full bg-blue-400" />
-                  {segment}
-                </li>
-              ))}
-            </ul>
+          {/* Gear Cards List */}
+          <div className="grid grid-cols-1 gap-6">
+            {Object.entries(currentBucketData.gears).map(([gearName, gearData]) => {
+              const isExpanded = expandedGears.has(gearName);
+              const isFastest = currentSummary?.fastest_gear === gearName;
+              
+              return (
+                <div 
+                  key={gearName} 
+                  className={cn(
+                    "bg-white rounded-3xl border-2 transition-all duration-500 overflow-hidden",
+                    isExpanded 
+                      ? "border-blue-100 shadow-2xl shadow-slate-100" 
+                      : "border-slate-50 hover:border-slate-200 hover:shadow-xl"
+                  )}
+                >
+                  <button 
+                    onClick={() => toggleGear(gearName)}
+                    className="w-full flex items-center gap-6 p-6 lg:p-8 text-left group"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-2xl font-black text-slate-900 truncate">{gearName}</h3>
+                        {isFastest && (
+                          <span className="px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-700 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 shadow-sm">
+                            <Trophy className="w-3 h-3" /> Winner
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className={cn(
+                          "flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ring-1 ring-inset",
+                          gearData.description.includes('increase') 
+                            ? "text-emerald-700 bg-emerald-50 ring-emerald-200"
+                            : gearData.description.includes('decrease')
+                              ? "text-rose-700 bg-rose-50 ring-rose-200"
+                              : "text-slate-500 bg-slate-50 ring-slate-200"
+                        )}>
+                          {gearData.description.includes('increase') ? <TrendingUp className="w-3.5 h-3.5" /> : 
+                           gearData.description.includes('decrease') ? <TrendingDown className="w-3.5 h-3.5" /> : 
+                           <Minus className="w-3.5 h-3.5" />}
+                          {gearData.description}
+                        </span>
+                        <div className="h-4 w-px bg-slate-200" />
+                        <div className="flex items-center gap-2 text-slate-400">
+                          <ActivityIcon className="w-3.5 h-3.5" />
+                          <span className="text-[11px] font-bold">{gearData.efforts.length} efforts</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0 px-8 border-r border-slate-100 hidden sm:block">
+                      <div className="text-[9px] uppercase tracking-widest text-slate-400 font-black mb-1">3-mo Prediction</div>
+                      <div className="font-mono text-base font-black text-slate-900 tabular-nums">
+                        {gearData.prediction.match(/\d+\.\d+/)?.[0] || '—'}
+                        <span className="text-[10px] ml-1 opacity-50 uppercase font-bold">mph</span>
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      "shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-300",
+                      isExpanded ? "bg-blue-600 text-white shadow-lg shadow-blue-200 rotate-180" : "bg-slate-50 text-slate-400 group-hover:bg-slate-100 group-hover:text-slate-600"
+                    )}>
+                      <ChevronDown className="w-6 h-6" />
+                    </div>
+                  </button>
+
+                  {/* Expanded Content */}
+                  <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.4, ease: "easeInOut" }}
+                    >
+                      <div className="border-t border-slate-50 p-6 lg:p-10 bg-slate-50/30 space-y-12">
+                        {/* Main Trend Chart */}
+                        <div className="space-y-6">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                                <ActivityIcon className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-black uppercase tracking-widest text-slate-900">Chronological Speed Trend</h4>
+                                <p className="text-[11px] text-slate-400 font-medium">Tracking performance evolution over time</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest">
+                              <div className="flex items-center gap-2 text-blue-600">
+                                <div className="w-2.5 h-2.5 rounded-full bg-blue-600" /> Efforts
+                              </div>
+                              <div className="flex items-center gap-2 text-slate-300">
+                                <div className="w-6 h-0.5 bg-slate-300 rounded-full" /> Trend
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="h-72 w-full bg-white rounded-3xl border border-slate-100 p-6 shadow-sm">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={gearData.efforts.map((e, idx) => ({ ...e, trend: gearData.trendline[idx] }))}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis 
+                                  dataKey="date" 
+                                  hide 
+                                />
+                                <YAxis 
+                                  domain={['auto', 'auto']}
+                                  axisLine={false}
+                                  tickLine={false}
+                                  tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                                  unit="mph"
+                                />
+                                <Tooltip 
+                                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                  itemStyle={{ fontSize: '12px', fontWeight: 700 }}
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="speed" 
+                                  stroke="#3b82f6" 
+                                  strokeWidth={4} 
+                                  dot={{ r: 4, fill: '#3b82f6', strokeWidth: 2, stroke: '#fff' }}
+                                  activeDot={{ r: 6, fill: '#3b82f6', strokeWidth: 3, stroke: '#fff' }}
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="trend" 
+                                  stroke="#e2e8f0" 
+                                  strokeWidth={2} 
+                                  strokeDasharray="5 5"
+                                  dot={false}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        {/* Per-Segment Breakdown */}
+                        <div className="space-y-6">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
+                              <Layers className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black uppercase tracking-widest text-slate-900">Performance by Segment</h4>
+                              <p className="text-[11px] text-slate-400 font-medium">Granular analysis of specific segment efforts</p>
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {Object.entries(groupEffortsBySegment(gearData.efforts)).map(([segName, efforts]) => (
+                              <div key={segName} className="bg-white rounded-3xl p-6 border border-slate-100 hover:border-blue-100 transition-colors shadow-sm overflow-hidden">
+                                <div className="flex items-center justify-between mb-6">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+                                    <span className="text-xs font-black text-slate-700 truncate uppercase tracking-tight">{segName}</span>
+                                  </div>
+                                  <div className="flex items-center gap-3 text-[10px] font-black shrink-0">
+                                    <span className="text-slate-400 uppercase tracking-tighter">Avg <span className="text-slate-900 font-black">{calculateAvgSpeed(efforts).toFixed(1)}mph</span></span>
+                                    <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md">{efforts.length}</span>
+                                  </div>
+                                </div>
+                                
+                                <div className="h-28 w-full">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <ScatterChart margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
+                                      <XAxis type="number" dataKey="timestamp" hide />
+                                      <YAxis type="number" dataKey="speed" hide domain={['dataMin - 1', 'dataMax + 1']} />
+                                      <Tooltip 
+                                        cursor={{ strokeDasharray: '3 3' }}
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
+                                      />
+                                      <Scatter data={efforts} fill="#818cf8">
+                                        {efforts.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill="#818cf8" />
+                                        ))}
+                                      </Scatter>
+                                    </ScatterChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                  </AnimatePresence>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
+
+      {/* Page Footer */}
+      <div className="mt-12 pt-12 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-center gap-8">
+        <Link to="/" className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-blue-600 transition-colors group">
+          <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" />
+          Back to Dashboard
+        </Link>
+        <div className="w-1 h-1 rounded-full bg-slate-200 hidden sm:block" />
+        <Link to="/trends" className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-indigo-600 transition-colors group">
+          Power Performance Trends
+          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+        </Link>
+      </div>
     </div>
   );
 };
@@ -699,7 +955,11 @@ import {
   ResponsiveContainer, 
   Legend,
   AreaChart,
-  Area
+  Area,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+  Cell
 } from 'recharts';
 
 const Trends = () => {
