@@ -41,11 +41,30 @@ import {
   Activity,
   SegmentReport,
   SpeedTrends,
+  SpeedTrendGear,
+  SpeedTrendEffort,
   PowerTrends,
   ActivityDetails,
   RankingInfo
 } from './types';
 import { cn, formatDisplayDate } from './lib/utils';
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Legend,
+  AreaChart,
+  Area,
+  ScatterChart,
+  Scatter,
+  ZAxis,
+  Cell
+} from 'recharts';
+
 
 
 // Components
@@ -173,7 +192,7 @@ const Dashboard = () => {
   const currentMonth = new Date().toISOString().substring(0, 7);
   const currentYear = new Date().getFullYear().toString();
   
-  const currentMonthBikeUsage = bikeUsage ? Object.entries(bikeUsage).map(([name, data]) => {
+  const currentMonthBikeUsage = bikeUsage ? (Object.entries(bikeUsage) as [string, any][]).map(([name, data]) => {
     const yearData = data.years[currentYear];
     const monthData = yearData?.months[currentMonth];
     return {
@@ -473,14 +492,15 @@ const Comparison = () => {
     setExpandedGears(next);
   };
 
-  const groupEffortsBySegment = (efforts: any[]) => {
-    const groups: { [key: string]: any[] } = {};
+  const groupEffortsBySegment = (efforts: SpeedTrendEffort[]): { [key: string]: SpeedTrendEffort[] } => {
+    const groups: { [key: string]: SpeedTrendEffort[] } = {};
     efforts.forEach(e => {
       if (!groups[e.segment_name]) groups[e.segment_name] = [];
       groups[e.segment_name].push(e);
     });
     return groups;
   };
+
 
   const calculateAvgSpeed = (efforts: any[]) => {
     if (!efforts.length) return 0;
@@ -598,7 +618,7 @@ const Comparison = () => {
 
           {/* Gear Cards List */}
           <div className="grid grid-cols-1 gap-6">
-            {Object.entries(currentBucketData.gears).map(([gearName, gearData]) => {
+            {(Object.entries(currentBucketData.gears) as [string, SpeedTrendGear][]).map(([gearName, gearData]) => {
               const isExpanded = expandedGears.has(gearName);
               const isFastest = currentSummary?.fastest_gear === gearName;
               
@@ -763,21 +783,24 @@ const Comparison = () => {
                                 
                                 <div className="h-28 w-full">
                                   <ResponsiveContainer width="100%" height="100%">
-                                    <ScatterChart margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                                    <ScatterChart margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
                                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
-                                      <XAxis type="number" dataKey="timestamp" hide />
+                                      <XAxis type="number" dataKey="timestamp" hide domain={['auto', 'auto']} />
                                       <YAxis type="number" dataKey="speed" hide domain={['dataMin - 1', 'dataMax + 1']} />
                                       <Tooltip 
                                         cursor={{ strokeDasharray: '3 3' }}
                                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontSize: '10px' }}
+                                        formatter={(value: any) => [`${Number(value).toFixed(2)} mph`, 'Speed']}
+                                        labelFormatter={() => ''}
                                       />
-                                      <Scatter data={efforts} fill="#818cf8">
-                                        {efforts.map((entry, index) => (
+                                      <Scatter name={segName} data={efforts} fill="#818cf8">
+                                        {efforts.map((_entry, index) => (
                                           <Cell key={`cell-${index}`} fill="#818cf8" />
                                         ))}
                                       </Scatter>
                                     </ScatterChart>
                                   </ResponsiveContainer>
+
                                 </div>
                               </div>
                             ))}
@@ -945,22 +968,7 @@ const Maintenance = () => {
     </div>
   );
 };
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer, 
-  Legend,
-  AreaChart,
-  Area,
-  ScatterChart,
-  Scatter,
-  ZAxis,
-  Cell
-} from 'recharts';
+
 
 const Trends = () => {
   const [powerTrends, setPowerTrends] = useState<PowerTrends | null>(null);
