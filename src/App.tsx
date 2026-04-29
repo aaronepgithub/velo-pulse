@@ -1414,7 +1414,7 @@ const ActivityDetailView = () => {
           <div className="flex flex-wrap gap-4">
           <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Distance</p>
-            <p className="text-xl font-bold text-slate-900">{activity.distance_miles.toFixed(2)} <span className="text-sm font-normal text-slate-500">mi</span></p>
+            <p className="text-xl font-bold text-slate-900">{(activity.distance_miles || 0).toFixed(2)} <span className="text-sm font-normal text-slate-500">mi</span></p>
           </div>
           <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
             <p className="text-xs text-slate-400 uppercase font-bold tracking-wider">Moving Time</p>
@@ -1530,7 +1530,7 @@ const ActivityDetailView = () => {
                       {effort.average_speed && (
                         <div className="flex items-center gap-1.5" title="Speed">
                           <Gauge className="w-3.5 h-3.5 text-blue-500" />
-                          <span className="text-sm font-bold text-slate-700">{effort.average_speed.toFixed(1)}<span className="text-[10px] font-normal text-slate-400 ml-0.5">mph</span></span>
+                          <span className="text-sm font-bold text-slate-700">{(effort.average_speed || 0).toFixed(1)}<span className="text-[10px] font-normal text-slate-400 ml-0.5">mph</span></span>
                         </div>
                       )}
                       {effort.average_heartrate && (
@@ -1544,10 +1544,10 @@ const ActivityDetailView = () => {
                   <td className="py-6 px-4">
                     <div className="flex flex-col gap-2 min-w-[140px]">
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-                        <RankingBadge label="All Time" ranking={effort.rankings.all_time} />
-                        <RankingBadge label="This Year" ranking={effort.rankings.this_year} />
-                        <RankingBadge label="Same Gear" ranking={effort.rankings.same_gear} />
-                        <RankingBadge label="Gear Year" ranking={effort.rankings.same_gear_this_year} />
+                        <RankingBadge label="All Time" ranking={effort.rankings?.all_time} />
+                        <RankingBadge label="This Year" ranking={effort.rankings?.this_year} />
+                        <RankingBadge label="Same Gear" ranking={effort.rankings?.same_gear} />
+                        <RankingBadge label="Gear Year" ranking={effort.rankings?.same_gear_this_year} />
                       </div>
                     </div>
                   </td>
